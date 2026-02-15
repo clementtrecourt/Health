@@ -380,7 +380,7 @@ const WorkoutApp = () => {
               }`}
             >
               <TrendingUp className="inline w-4 h-4 mr-2" />
-              Mensurations
+              Mensu
             </button>
           </div>
         </div>
