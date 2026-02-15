@@ -1,7 +1,25 @@
+import fs from 'fs';
 import { neon } from '@netlify/neon';
 
 const sql = neon();
+const csvData = fs.readFileSync('weights.csv', 'utf-8');
+const rows = csvData
+  .split('\n')
+  .slice(1) // ignorer l'en-tête
+  .map(line => line.split('\t')) // tab-delimited
+  .map(([date, poids, moyenne]) => ({
+    date,
+    poids: parseFloat(poids)
+  }));
 
+for (const row of rows) {
+  await sql`
+    INSERT INTO measurements(date, poids)
+    VALUES(${row.date}, ${row.poids})
+  `;
+}
+
+console.log('Import terminé');
 export async function handler(event) {
   try {
     // GET → récupérer toutes les mensurations
