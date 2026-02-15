@@ -1,805 +1,335 @@
 import React, { useState, useEffect } from 'react';
-import { Dumbbell, Calendar, BarChart3, TrendingUp, Flame, Target, Zap, Sparkles } from 'lucide-react';
+import { Dumbbell, Calendar, BarChart3, TrendingUp, Zap, Sparkles, Trash2, Edit2, X } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const WorkoutApp = () => {
   const [activeView, setActiveView] = useState('program');
   const [activeDay, setActiveDay] = useState('lundi');
-  const [expandedDay, setExpandedDay] = useState(null);
-//   useEffect(() => {
-//   fetch('/.netlify/functions/db')
-//     .then(res => res.json())
-//     .then(data => console.log('DB OK:', data))
-//     .catch(err => console.error(err));
-// }, []);
-const [timeRange, setTimeRange] = useState('7d'); // '7d', '1m', '1y', 'all'
-  useEffect(() => {
-  const loadMeasurements = async () => {
-    try {
-      const res = await fetch('/.netlify/functions/measurements');
-      if (!res.ok) throw new Error('Erreur serveur');
-      const data = await res.json();
-      setMeasurements(data);
-    } catch (err) {
-      console.error('Erreur chargement:', err);
-    }
-  };
-
-  loadMeasurements();
-}, []);
-  // Mensurations
+  const [timeRange, setTimeRange] = useState('7d');
   const [measurements, setMeasurements] = useState([]);
   const [showAllHistory, setShowAllHistory] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [newMeasurement, setNewMeasurement] = useState({
     date: new Date().toISOString().split('T')[0],
-    cou: '',
-    epaules: '',
-    pectoraux: '',
-    taille: '',
-    cuisses: '',
-    bras: '',
-    poids: ''
+    cou: '', epaules: '', pectoraux: '', taille: '', cuisses: '', bras: '', poids: ''
   });
 
-  // Fonctions mensurations
+  useEffect(() => { fetchMeasurements(); }, []);
+
+  const fetchMeasurements = async () => {
+    try {
+      const res = await fetch('/.netlify/functions/measurements');
+      const data = await res.json();
+      setMeasurements(data);
+    } catch (err) { console.error('Erreur:', err); }
+  };
+
   const saveMeasurement = async () => {
-  try {
-    // Convertir les strings vides en null ou number
-    const payload = {
-      ...newMeasurement,
-      cou: newMeasurement.cou ? parseFloat(newMeasurement.cou) : null,
-      epaules: newMeasurement.epaules ? parseFloat(newMeasurement.epaules) : null,
-      pectoraux: newMeasurement.pectoraux ? parseFloat(newMeasurement.pectoraux) : null,
-      taille: newMeasurement.taille ? parseFloat(newMeasurement.taille) : null,
-      cuisses: newMeasurement.cuisses ? parseFloat(newMeasurement.cuisses) : null,
-      bras: newMeasurement.bras ? parseFloat(newMeasurement.bras) : null,
-      poids: newMeasurement.poids ? parseFloat(newMeasurement.poids) : null,
-    };
+    try {
+      const method = editingId ? 'PUT' : 'POST';
+      const body = editingId ? { ...newMeasurement, id: editingId } : newMeasurement;
 
-    const res = await fetch('/.netlify/functions/measurements', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      const res = await fetch('/.netlify/functions/measurements', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) throw new Error('Erreur');
+
+      // Reset total
+      setEditingId(null);
+      setNewMeasurement({
+        date: new Date().toISOString().split('T')[0],
+        cou: '', epaules: '', pectoraux: '', taille: '', cuisses: '', bras: '', poids: ''
+      });
+      fetchMeasurements();
+    } catch (err) { alert("Erreur lors de l'enregistrement"); }
+  };
+
+  const startEdit = (m) => {
+    setEditingId(m.id);
+    setNewMeasurement({
+      date: m.date.split('T')[0],
+      cou: m.cou || '',
+      epaules: m.epaules || '',
+      pectoraux: m.pectoraux || '',
+      taille: m.taille || '',
+      cuisses: m.cuisses || '',
+      bras: m.bras || '',
+      poids: m.poids || ''
     });
-
-    if (!res.ok) throw new Error('Erreur ajout');
-
-    const saved = await res.json();
-    setMeasurements(prev => [saved, ...prev]);
-  } catch (err) {
-    console.error(err);
-  }
-};
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const deleteMeasurement = async (id) => {
-  await fetch('/.netlify/functions/measurements', {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id }),
-  });
-
-  setMeasurements(prev => prev.filter(m => m.id !== id));
-
-};
-
-  const getLatestMeasurement = () => {
-    return measurements.length > 0 ? measurements[0] : null;
+    if (!window.confirm('Supprimer cette mesure ?')) return;
+    await fetch('/.netlify/functions/measurements', {
+      method: 'DELETE',
+      body: JSON.stringify({ id }),
+    });
+    fetchMeasurements();
   };
 
+  // Logique de progression en CM / KG
   const getMeasurementProgress = (metric) => {
     if (measurements.length < 2) return null;
-    const latest = parseFloat(measurements[0][metric]) || 0;
-    const previous = parseFloat(measurements[1][metric]) || 0;
-    if (latest === 0 || previous === 0) return null;
-    return ((latest - previous) / previous * 100).toFixed(1);
-  };
-  const getChartData = (metric) => {
-  return measurements
-    .filter(m => m[metric])
-    .sort((a, b) => new Date(a.date) - new Date(b.date)) // tri croissant par date
-    .map(m => ({
-      date: new Date(m.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
-      value: parseFloat(m[metric])
-    }));
-};
-  const getFilteredData = (metric) => {
-  // 1. On trie par date croissante pour le graphique et le calcul
-  const sorted = [...measurements].sort((a, b) => new Date(a.date) - new Date(b.date));
-
-  // 2. On calcule la moyenne mobile (sur 7 points)
-  const dataWithMA = sorted.map((m, index) => {
-    const windowSize = 7;
-    const start = Math.max(0, index - windowSize + 1);
-    const subset = sorted.slice(start, index + 1);
-    const sum = subset.reduce((acc, curr) => acc + (parseFloat(curr[metric]) || 0), 0);
-    const avg = sum / subset.length;
-
+    const sorted = [...measurements].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const latest = parseFloat(sorted[0][metric]);
+    const previous = parseFloat(sorted[1][metric]);
+    if (!latest || !previous) return null;
+    const diff = (latest - previous).toFixed(1);
     return {
-      date: new Date(m.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
-      fullDate: new Date(m.date),
-      value: parseFloat(m[metric]),
-      moyenne: parseFloat(avg.toFixed(2))
+      val: diff > 0 ? `+${diff}` : diff,
+      isPositive: diff > 0
     };
-  });
-
-  // 3. On filtre selon la période
-  const now = new Date();
-  return dataWithMA.filter(d => {
-    const diffTime = Math.abs(now - d.fullDate);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (timeRange === '7d') return diffDays <= 7;
-    if (timeRange === '1m') return diffDays <= 30;
-    if (timeRange === '1y') return diffDays <= 365;
-    return true; // 'all'
-  });
-};
-  const workoutDays = {
-    lundi: {
-      name: "UPPER A",
-      subtitle: "Largeur & Épaisseur",
-      color: "from-red-500 to-red-700",
-      accent: "bg-red-500",
-      textAccent: "text-red-400",
-      emoji: "🔴",
-      day: "LUNDI",
-      goal: "On ajoute du volume Dos sans charger les lombaires",
-      totalSeries: { Pectoraux: 7, Dorsaux: 8, Deltoïdes: 4 },
-      exercises: [
-        {
-          name: "Développé Incliné Haltères",
-          sets: "4 x 8-10",
-          rpe: 9,
-          muscles: ["Pectoraux"]
-        },
-        {
-          name: "Tirage Vertical Large (Lat Pulldown)",
-          sets: "4 x 10-12",
-          rpe: 9,
-          tech: "Étirement max en haut.",
-          muscles: ["Dorsaux"]
-        },
-        {
-          name: "Chest Press Machine (Lourd)",
-          sets: "3 x 8-10",
-          rpe: 10,
-          muscles: ["Pectoraux"]
-        },
-        {
-          name: "Tirage Horizontal Unilatéral",
-          sets: "4 x 12",
-          rpe: 9,
-          ajout: "+4 séries pour le dos. L'unilatéral permet d'aller chercher plus loin derrière.",
-          muscles: ["Dorsaux"]
-        },
-        {
-          name: "Lu Raises (Élévations Latérales Amplitude Max)",
-          sets: "4 x 15-20",
-          rpe: 9,
-          muscles: ["Deltoïdes"]
-        }
-      ]
-    },
-    mercredi: {
-      name: "LEGS A + ARMS DAY",
-      subtitle: "Quads & Bras",
-      color: "from-purple-500 to-purple-700",
-      accent: "bg-purple-500",
-      textAccent: "text-purple-400",
-      emoji: "🟣",
-      day: "MERCREDI",
-      goal: "On transforme ce jour en vraie séance BRAS",
-      totalSeries: { Quadriceps: 14, Biceps: 7, Triceps: 7 },
-      exercises: [
-        {
-          name: "Presse à Cuisses (Pieds bas)",
-          sets: "4 x 10-12",
-          rpe: 9,
-          muscles: ["Quadriceps"]
-        },
-        {
-          name: "Leg Extension",
-          sets: "4 x 15-20",
-          rpe: 10,
-          note: "Dropset final",
-          muscles: ["Quadriceps"]
-        },
-        {
-          name: "Sissy Squat (ou Fentes)",
-          sets: "3 x Échec",
-          rpe: 10,
-          note: "Total Quads : 11 séries (suffisant ici)",
-          muscles: ["Quadriceps"]
-        },
-        {
-          name: "SUPERSET A - Bayesian Curl + Triceps Katana",
-          sets: "4 tours",
-          rpe: 9,
-          details: "A1. Bayesian Curl (Câble, dos à poulie) : 4x12-15 (Étirement Biceps) • A2. Triceps Katana (Extension Overhead) : 4x12-15 (Étirement Triceps)",
-          gain: "Tu ajoutes 7 séries de Triceps et 7 séries de Biceps d'un coup",
-          muscles: ["Biceps", "Triceps"]
-        },
-        {
-          name: "SUPERSET B - Preacher Curl + Pushdown",
-          sets: "3 tours",
-          rpe: 9,
-          details: "B1. Preacher Curl Machine : 3x12 (Contraction courte) • B2. Triceps Pushdown Barre : 3x15 (Vaste externe)",
-          muscles: ["Biceps", "Triceps"]
-        }
-      ]
-    },
-    vendredi: {
-      name: "PUSH AESTHETIC",
-      subtitle: "Pecs/Épaules/Triceps",
-      color: "from-red-500 to-orange-600",
-      accent: "bg-orange-500",
-      textAccent: "text-orange-400",
-      emoji: "🔴",
-      day: "VENDREDI",
-      goal: "Focus sur le \"Shelf\" et les triceps",
-      totalSeries: { Pectoraux: 8, Deltoïdes: 13, Triceps: 8 },
-      exercises: [
-        {
-          name: "Dev. Incliné Machine (Smith)",
-          sets: "4 x 10-12",
-          rpe: 9,
-          muscles: ["Pectoraux"]
-        },
-        {
-          name: "Élévations Latérales Câble (Derrière le dos)",
-          sets: "5 x 15-20",
-          rpe: 10,
-          volumeMax: "Tension continue pour les deltoïdes",
-          muscles: ["Deltoïdes"]
-        },
-        {
-          name: "Pec Deck (Fly)",
-          sets: "4 x 15",
-          rpe: 9,
-          note: "Partiels en position étirée sur la fin",
-          muscles: ["Pectoraux"]
-        },
-        {
-          name: "Skullcrusher (Barre au front)",
-          sets: "4 x 10-12",
-          rpe: 9,
-          ajout: "4 séries lourdes pour la masse du triceps",
-          muscles: ["Triceps"]
-        },
-        {
-          name: "Facepull (Corde)",
-          sets: "4 x 15-20",
-          rpe: 8,
-          muscles: ["Deltoïdes"]
-        }
-      ]
-    },
-    samedi: {
-      name: "LEGS B + RAPPEL DOS/BICEPS",
-      subtitle: "Ischios & Pull",
-      color: "from-orange-500 to-amber-600",
-      accent: "bg-amber-500",
-      textAccent: "text-amber-400",
-      emoji: "🟠",
-      day: "SAMEDI",
-      goal: "On corrige le manque de volume Ischios et Dos",
-      totalSeries: { "Ischios/Fessiers": 12, Dorsaux: 8, Biceps: 7 },
-      exercises: [
-        {
-          name: "Leg Curl Assis",
-          sets: "5 x 10-15",
-          rpe: 10,
-          ajout: "5 séries lourdes. Penche le buste en avant pour étirer l'ischio.",
-          muscles: ["Ischio-jambiers"]
-        },
-        {
-          name: "Presse à Cuisses (Pieds Hauts & Larges)",
-          sets: "4 x 12",
-          rpe: 9,
-          focus: "Fessiers/Ischios",
-          muscles: ["Fessiers", "Ischio-jambiers"]
-        },
-        {
-          name: "Hyperextension (Focus Ischios/Fessiers)",
-          sets: "3 x 15-20",
-          rpe: 9,
-          technique: "Dos rond, menton rentré, contracte les fessiers. (Remplace le Deadlift)",
-          note: "Total Ischios/Fessiers : 12 séries",
-          muscles: ["Fessiers", "Ischio-jambiers"]
-        },
-        {
-          name: "Tirage Vertical Prise Neutre Serrée",
-          sets: "4 x 12",
-          rpe: 9,
-          ajout: "Cible le bas des dorsaux",
-          muscles: ["Dorsaux"]
-        },
-        {
-          name: "Curl Marteau (Corde poulie basse)",
-          sets: "4 x 12-15",
-          rpe: 9,
-          ajout: "Brachial et Avant-bras",
-          muscles: ["Biceps", "Avant-bras"]
-        }
-      ]
-    }
   };
 
-  const getAllMuscleVolume = () => {
-    const volume = {};
-    Object.values(workoutDays).forEach(day => {
-      Object.entries(day.totalSeries).forEach(([muscle, count]) => {
-        if (!volume[muscle]) volume[muscle] = 0;
-        volume[muscle] += count;
-      });
+  // Filtrage robuste pour les graphiques
+  const getFilteredData = (metric) => {
+    const sorted = [...measurements]
+      .filter(m => m[metric] !== null && m[metric] !== "")
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    const dataWithMA = sorted.map((m, index) => {
+      const windowSize = 7;
+      const start = Math.max(0, index - windowSize + 1);
+      const subset = sorted.slice(start, index + 1);
+      const avg = subset.reduce((acc, curr) => acc + parseFloat(curr[metric]), 0) / subset.length;
+
+      return {
+        date: new Date(m.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
+        fullDate: new Date(m.date),
+        value: parseFloat(m[metric]),
+        moyenne: parseFloat(avg.toFixed(2))
+      };
     });
-    return volume;
+
+    const now = new Date();
+    return dataWithMA.filter(d => {
+      const diffDays = Math.ceil(Math.abs(now - d.fullDate) / (1000 * 60 * 60 * 24));
+      if (timeRange === '7d') return diffDays <= 7;
+      if (timeRange === '1m') return diffDays <= 30;
+      if (timeRange === '1y') return diffDays <= 365;
+      return true;
+    });
   };
 
-  const weeklyVolume = getAllMuscleVolume();
   const getWeightTrends = () => {
     if (measurements.length < 2) return { sevenDays: null, oneMonth: null };
-
     const sorted = [...measurements].sort((a, b) => new Date(b.date) - new Date(a.date));
-    const latestWeight = parseFloat(sorted[0].poids);
+    const latest = parseFloat(sorted[0].poids);
 
-    const getDiff = (daysAgo) => {
-      const targetDate = new Date();
-      targetDate.setDate(targetDate.getDate() - daysAgo);
-      
-      const pastEntry = sorted.find(m => new Date(m.date) <= targetDate);
-      if (!pastEntry) return null;
-      
-      const diff = latestWeight - parseFloat(pastEntry.poids);
-      return {
-        value: diff.toFixed(2),
-        isLoss: diff <= 0
-      };
+    const getDiff = (days) => {
+      const target = new Date();
+      target.setDate(target.getDate() - days);
+      const past = sorted.find(m => new Date(m.date) <= target);
+      if (!past) return null;
+      const d = (latest - parseFloat(past.poids)).toFixed(1);
+      return { val: d > 0 ? `+${d}` : d, isLoss: d <= 0 };
     };
-
-    return {
-      sevenDays: getDiff(7),
-      oneMonth: getDiff(30)
-    };
+    return { sevenDays: getDiff(7), oneMonth: getDiff(30) };
   };
 
   const weightTrends = getWeightTrends();
+
+  // --- RENDU ---
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Super Header avec stats */}
-      <div className="relative overflow-hidden border-b border-zinc-900">
-        <div className="absolute inset-0">
-          <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 via-purple-500/5 to-orange-500/5" />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-red-500/10 via-transparent to-transparent" />
-        </div>
-        
-        <div className="relative px-6 py-8 max-w-7xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center shadow-lg shadow-red-500/30">
-                <Dumbbell className="w-8 h-8" strokeWidth={2.5} />
-              </div>
-              <div>
-                <h1 className="text-5xl font-black tracking-tighter uppercase bg-gradient-to-r from-white via-zinc-100 to-zinc-400 bg-clip-text text-transparent"
-                    style={{ fontFamily: '"Bebas Neue", Impact, sans-serif' }}>
-                  HYPERTROPHY PROTOCOL
-                </h1>
-                <p className="text-zinc-500 text-sm font-bold tracking-widest mt-1">
-                  SCIENCE-BASED • 4 JOURS/SEMAINE
-                </p>
-              </div>
-            </div>
+    <div className="min-h-screen bg-black text-white font-sans pb-10">
+      {/* Header compact mobile */}
+      <div className="bg-zinc-950 border-b border-zinc-900 px-4 py-6 md:px-10">
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-red-600 rounded-xl shadow-lg shadow-red-600/20">
+            <Dumbbell className="w-6 h-6 text-white" />
           </div>
-
-          {/* Mini stats hebdo */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {Object.entries(weeklyVolume).slice(0, 4).map(([muscle, sets]) => (
-              <div key={muscle} className="bg-zinc-900/50 backdrop-blur-sm rounded-xl p-3 border border-zinc-800/50">
-                <div className="text-2xl font-black text-red-400">{sets}</div>
-                <div className="text-xs text-zinc-500 uppercase font-bold">{muscle} / semaine</div>
-              </div>
-            ))}
-          </div>
+          <h1 className="text-3xl font-black tracking-tighter uppercase italic">Hypertrophy</h1>
         </div>
       </div>
 
-      {/* Navigation Tabs */}
-      <div className="sticky top-0 z-30 bg-black/95 backdrop-blur-xl border-b border-zinc-900">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex gap-2 py-4">
-            <button
-              onClick={() => setActiveView('program')}
-              className={`px-5 py-2.5 rounded-xl font-black uppercase text-sm tracking-wider transition-all ${
-                activeView === 'program'
-                  ? 'bg-gradient-to-r from-red-600 to-red-500 text-white shadow-lg shadow-red-500/30'
-                  : 'bg-zinc-900 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300'
-              }`}
-            >
-              <Calendar className="inline w-4 h-4 mr-2" />
-              Séances
-            </button>
-          
-            <button
-              onClick={() => setActiveView('stats')}
-              className={`px-5 py-2.5 rounded-xl font-black uppercase text-sm tracking-wider transition-all ${
-                activeView === 'stats'
-                  ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white shadow-lg shadow-purple-500/30'
-                  : 'bg-zinc-900 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300'
-              }`}
-            >
-              <BarChart3 className="inline w-4 h-4 mr-2" />
-              Volume
-            </button>
-            <button
-              onClick={() => setActiveView('measurements')}
-              className={`px-5 py-2.5 rounded-xl font-black uppercase text-sm tracking-wider transition-all ${
-                activeView === 'measurements'
-                  ? 'bg-gradient-to-r from-green-600 to-emerald-500 text-white shadow-lg shadow-green-500/30'
-                  : 'bg-zinc-900 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300'
-              }`}
-            >
-              <TrendingUp className="inline w-4 h-4 mr-2" />
-              Mensu
-            </button>
-          </div>
-        </div>
-      </div>
-
-{/* Contenu */}
-      <div className="max-w-7xl mx-auto p-6">
-        {activeView === 'program' ? (
-          <div className="space-y-6">
-            {/* Sélecteur de jour */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {Object.entries(workoutDays).map(([key, data]) => (
-                <button
-                  key={key}
-                  onClick={() => setActiveDay(key)}
-                  className={`group relative overflow-hidden rounded-2xl transition-all duration-300 ${
-                    activeDay === key ? 'scale-105' : 'hover:scale-102'
-                  }`}
-                >
-                  <div className={`absolute inset-0 bg-gradient-to-br ${data.color} transition-opacity ${
-                    activeDay === key ? 'opacity-100' : 'opacity-0'
-                  }`} />
-                  <div className={`absolute inset-0 bg-zinc-900 transition-opacity ${
-                    activeDay === key ? 'opacity-0' : 'opacity-100'
-                  }`} />
-                  <div className={`absolute inset-0 border-2 rounded-2xl transition-colors ${
-                    activeDay === key ? 'border-white/20' : 'border-zinc-800 group-hover:border-zinc-700'
-                  }`} />
-                  <div className="relative p-6">
-                    <div className="text-4xl mb-3">{data.emoji}</div>
-                    <div className={`text-xs uppercase font-black tracking-widest mb-2 ${activeDay === key ? 'text-white/80' : 'text-zinc-600'}`}>{data.day}</div>
-                    <div className={`text-lg font-black mb-1 ${activeDay === key ? 'text-white' : 'text-zinc-400'}`}>{data.name}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            {activeDay && (
-              <div className="space-y-4 animate-fadeIn">
-                <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${workoutDays[activeDay].color} p-8 shadow-2xl`}>
-                  <h2 className="text-4xl font-black uppercase mb-1">{workoutDays[activeDay].name}</h2>
-                  <p className="text-white/80 font-medium mb-4">{workoutDays[activeDay].goal}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {Object.entries(workoutDays[activeDay].totalSeries).map(([muscle, sets]) => (
-                      <div key={muscle} className="px-4 py-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20">
-                        <span className="text-sm font-bold">{muscle}: {sets}s</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {workoutDays[activeDay].exercises.map((ex, idx) => (
-                    <div key={idx} className="bg-zinc-900 rounded-xl border-2 border-zinc-800 p-6">
-                      <h3 className="text-2xl font-black mb-3">{ex.name}</h3>
-                      <div className="flex flex-wrap gap-2 mb-4">
-                        <span className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 text-sm font-black uppercase">{ex.sets}</span>
-                        <span className="px-3 py-1.5 rounded-lg bg-zinc-800 text-sm font-black text-zinc-300">RPE {ex.rpe}</span>
-                      </div>
-                      <div className="space-y-2">
-                        {ex.tech && <InfoBlock icon={Zap} label="Technique" text={ex.tech} color="yellow" />}
-                        {ex.ajout && <InfoBlock icon={TrendingUp} label="Ajout" text={ex.ajout} color="green" />}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        
-        ) : activeView === 'stats' ? (
-          <div className="space-y-6 animate-fadeIn">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {Object.entries(weeklyVolume).map(([muscle, sets]) => (
-                <div key={muscle} className="bg-zinc-900 p-6 rounded-xl border border-purple-500/20">
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="font-black text-lg uppercase">{muscle}</h3>
-                    <div className="text-3xl font-black text-purple-400">{sets}</div>
-                  </div>
-                  <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-purple-500" style={{ width: `${(sets / 20) * 100}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : activeView === 'measurements' ? (
-          <div className="space-y-6 animate-fadeIn">
-            <div className="bg-zinc-900 rounded-2xl p-6 border-2 border-zinc-800">
-              <h3 className="text-xl font-black mb-4 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-green-400" /> Nouvelle Mesure
-              </h3>
-              <div className="grid md:grid-cols-2 gap-4 mb-4">
-                <input type="date" value={newMeasurement.date} onChange={(e) => setNewMeasurement({...newMeasurement, date: e.target.value})} className="bg-zinc-800 p-3 rounded-lg border border-zinc-700 text-white" />
-                <input type="number" placeholder="Poids (kg)" value={newMeasurement.poids} onChange={(e) => setNewMeasurement({...newMeasurement, poids: e.target.value})} className="bg-zinc-800 p-3 rounded-lg border border-zinc-700 text-white" />
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                 {['cou', 'epaules', 'pectoraux', 'taille', 'bras', 'cuisses'].map(field => (
-                   <input key={field} type="number" placeholder={`${field} (cm)`} value={newMeasurement[field]} onChange={(e) => setNewMeasurement({...newMeasurement, [field]: e.target.value})} className="bg-zinc-800 p-3 rounded-lg border border-zinc-700 text-white" />
-                 ))}
-              </div>
-              <button onClick={saveMeasurement} className="w-full py-4 bg-green-600 hover:bg-green-700 rounded-xl font-black uppercase transition-all shadow-lg shadow-green-500/20">
-                💾 Enregistrer
-              </button>
-            </div>
-
-            {getLatestMeasurement() && (
-  <div className="bg-zinc-900 rounded-2xl p-6 border border-green-700/30">
-    <h3 className="text-xl font-black mb-4 uppercase tracking-wider">📊 État Actuel</h3>
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      {['poids', 'bras', 'taille', 'epaules', 'pectoraux', 'cuisses', 'cou'].map(metric => {
-        const latest = getLatestMeasurement();
-        const value = latest[metric];
-        if (!value) return null;
-
-        return (
-          <div key={metric} className={`p-4 rounded-xl border ${metric === 'poids' ? 'bg-green-500/5 border-green-500/20 col-span-2 md:col-span-1' : 'bg-black/40 border-zinc-800'}`}>
-            <div className="text-xs text-zinc-500 uppercase font-bold mb-1">{metric}</div>
-            <div className={`text-2xl font-black ${metric === 'poids' ? 'text-green-400' : 'text-white'}`}>
-              {value} <small className="text-xs">{metric === 'poids' ? 'kg' : 'cm'}</small>
-            </div>
-
-            {/* Affichage spécifique pour le POIDS (7j / 1m) */}
-            {metric === 'poids' && weightTrends.sevenDays && (
-              <div className="mt-3 space-y-1 border-t border-white/5 pt-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] text-zinc-500 font-bold uppercase">7 jours</span>
-                  <span className={`text-xs font-black ${weightTrends.sevenDays.isLoss ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {weightTrends.sevenDays.value > 0 ? '+' : ''}{weightTrends.sevenDays.value} kg
-                  </span>
-                </div>
-                {weightTrends.oneMonth && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] text-zinc-500 font-bold uppercase">1 mois</span>
-                    <span className={`text-xs font-black ${weightTrends.oneMonth.isLoss ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {weightTrends.oneMonth.value > 0 ? '+' : ''}{weightTrends.oneMonth.value} kg
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Pour les autres metrics (bras, taille...), on garde le % classique */}
-            {metric !== 'poids' && getMeasurementProgress(metric) && (
-              <div className={`text-xs font-bold mt-1 ${parseFloat(getMeasurementProgress(metric)) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {parseFloat(getMeasurementProgress(metric)) >= 0 ? '↗' : '↘'} {Math.abs(getMeasurementProgress(metric))}%
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  </div>
-)}
-            {/* Graphiques d'évolution */}
-{measurements.length >= 2 && (
-  <div className="space-y-6">
-    <div className="bg-zinc-900 rounded-2xl p-6 border-2 border-zinc-800">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-        <h3 className="text-2xl font-black flex items-center gap-2">
-          📈 Évolution
-        </h3>
-        
-        {/* Sélecteur de période Style "Badass" */}
-        <div className="flex bg-zinc-800 p-1 rounded-xl border border-zinc-700">
+      {/* Nav Sticky Mobile */}
+      <div className="sticky top-0 z-40 bg-black/80 backdrop-blur-lg border-b border-zinc-900">
+        <div className="flex justify-around p-2 max-w-2xl mx-auto">
           {[
-            { id: '7d', label: '7J' },
-            { id: '1m', label: '1M' },
-            { id: '1y', label: '1A' },
-            { id: 'all', label: 'ALL' }
-          ].map((range) => (
+            { id: 'program', icon: Calendar, label: 'Séances' },
+            { id: 'measurements', icon: TrendingUp, label: 'Mensus' },
+            { id: 'stats', icon: BarChart3, label: 'Volume' }
+          ].map(tab => (
             <button
-              key={range.id}
-              onClick={() => setTimeRange(range.id)}
-              className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${
-                timeRange === range.id 
-                ? 'bg-green-500 text-black shadow-[0_0_15px_rgba(16,185,129,0.4)]' 
-                : 'text-zinc-500 hover:text-white'
+              key={tab.id}
+              onClick={() => setActiveView(tab.id)}
+              className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all ${
+                activeView === tab.id ? 'text-red-500 bg-red-500/5' : 'text-zinc-500'
               }`}
             >
-              {range.label}
+              <tab.icon className="w-5 h-5" />
+              <span className="text-[10px] font-black uppercase tracking-widest">{tab.label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Graphique Poids principal */}
-      <div className="mb-8">
-        <div className="flex justify-between items-end mb-4">
-          <h4 className="text-lg font-bold text-green-400">Poids (kg)</h4>
-          <div className="text-xs text-zinc-500 flex gap-4">
-            <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-green-500"></span> Réel</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-white opacity-50 border-t border-dashed"></span> Moyenne (7j)</span>
-          </div>
-        </div>
-        
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={getFilteredData('poids')}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-            <XAxis 
-              dataKey="date" 
-              stroke="#71717a"
-              style={{ fontSize: '10px', fontWeight: 'bold' }}
-              minTickGap={10}
-            />
-            <YAxis 
-              stroke="#71717a"
-              style={{ fontSize: '10px', fontWeight: 'bold' }}
-              domain={['dataMin - 1', 'dataMax + 1']}
-              tickFormatter={(value) => `${value}k`}
-            />
-            <Tooltip 
-              contentStyle={{ 
-                backgroundColor: '#18181b', 
-                border: '2px solid #10b981',
-                borderRadius: '12px',
-              }}
-            />
-            {/* Ligne Moyenne Mobile (Lissée) */}
-            <Line 
-              type="monotone" 
-              dataKey="moyenne" 
-              stroke="#ffffff" 
-              strokeWidth={2}
-              strokeDasharray="5 5"
-              dot={false}
-              opacity={0.4}
-            />
-            {/* Ligne Réelle */}
-            <Line 
-              type="monotone" 
-              dataKey="value" 
-              stroke="#10b981" 
-              strokeWidth={4}
-              dot={timeRange === '7d' ? { fill: '#10b981', r: 4 } : false} 
-              activeDot={{ r: 6 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
+      <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8">
+        {activeView === 'measurements' && (
+          <div className="space-y-6 animate-fadeIn">
+            
+            {/* Formulaire stylisé */}
+            <div className="bg-zinc-900 rounded-3xl p-6 border-2 border-zinc-800 shadow-xl">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-black uppercase flex items-center gap-2">
+                  {editingId ? <Edit2 className="text-purple-500" /> : <Sparkles className="text-green-500" />}
+                  {editingId ? 'Modifier la mesure' : 'Nouvelle entrée'}
+                </h3>
+                {editingId && (
+                  <button onClick={() => setEditingId(null)} className="p-2 bg-zinc-800 rounded-full">
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
 
-      {/* Autres mensurations en petit */}
-      <div className="grid md:grid-cols-2 gap-4">
-        {['bras', 'taille', 'cuisses', 'pectoraux'].map(metric => {
-          const data = getFilteredData(metric);
-          if (data.length < 2) return null;
-          
-          return (
-            <div key={metric} className="bg-zinc-800/30 p-4 rounded-xl border border-zinc-800">
-              <h4 className="text-sm font-bold text-cyan-400 mb-2 uppercase">{metric}</h4>
-              <ResponsiveContainer width="100%" height={120}>
-                <LineChart data={data}>
-                  <XAxis dataKey="date" hide />
-                  <YAxis hide domain={['dataMin - 1', 'dataMax + 1']} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#18181b', border: '1px solid #06b6d4', fontSize: '10px' }}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="value" 
-                    stroke="#06b6d4" 
-                    strokeWidth={2} 
-                    dot={false} 
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase ml-2">Date</label>
+                  <input type="date" value={newMeasurement.date} onChange={(e) => setNewMeasurement({...newMeasurement, date: e.target.value})} className="w-full bg-zinc-800 p-4 rounded-2xl border border-zinc-700 focus:border-green-500 outline-none transition-all" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase ml-2">Poids (kg)</label>
+                  <input type="number" step="0.1" placeholder="75.0" value={newMeasurement.poids} onChange={(e) => setNewMeasurement({...newMeasurement, poids: e.target.value})} className="w-full bg-zinc-800 p-4 rounded-2xl border border-zinc-700 focus:border-green-500 outline-none text-xl font-black" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+                {['bras', 'taille', 'cuisses', 'epaules', 'pectoraux', 'cou'].map(field => (
+                  <div key={field} className="space-y-1">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase ml-2">{field}</label>
+                    <input type="number" step="0.1" placeholder="cm" value={newMeasurement[field]} onChange={(e) => setNewMeasurement({...newMeasurement, [field]: e.target.value})} className="w-full bg-zinc-800 p-3 rounded-xl border border-zinc-700 outline-none text-center font-bold" />
+                  </div>
+                ))}
+              </div>
+
+              <button 
+                onClick={saveMeasurement} 
+                className={`w-full py-5 rounded-2xl font-black uppercase tracking-widest transition-all shadow-lg ${
+                  editingId ? 'bg-purple-600 shadow-purple-900/20' : 'bg-green-600 shadow-green-900/20'
+                }`}
+              >
+                {editingId ? '💾 Mettre à jour' : '⚡ Enregistrer les données'}
+              </button>
             </div>
-          );
-        })}
-      </div>
-    </div>
-  </div>
-)}
 
-            {/* Message si pas assez de données */}
-            {measurements.length > 0 && measurements.length < 2 && (
-              <div className="bg-zinc-900 rounded-2xl p-8 border-2 border-zinc-800 text-center">
-                <div className="text-6xl mb-4">📊</div>
-                <h3 className="text-xl font-black mb-2">Ajoute une autre mesure !</h3>
-                <p className="text-zinc-400">Les graphiques s'afficheront dès que tu auras au moins 2 mesures enregistrées.</p>
+            {/* État Actuel en CM */}
+            {measurements.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {['poids', 'bras', 'taille', 'cuisses', 'epaules', 'pectoraux'].map(metric => {
+                  const val = measurements[0][metric];
+                  const progress = getMeasurementProgress(metric);
+                  if (!val) return null;
+                  return (
+                    <div key={metric} className={`p-4 rounded-2xl border ${metric === 'poids' ? 'bg-zinc-900 border-green-500/30' : 'bg-zinc-900/50 border-zinc-800'}`}>
+                      <div className="text-[10px] text-zinc-500 font-bold uppercase mb-1">{metric}</div>
+                      <div className="text-xl font-black tracking-tight">
+                        {val} <small className="text-[10px] text-zinc-500">{metric === 'poids' ? 'kg' : 'cm'}</small>
+                      </div>
+                      {progress && (
+                        <div className={`text-[10px] font-black mt-1 ${progress.isPositive ? 'text-red-400' : 'text-green-400'}`}>
+                          {progress.val} {metric === 'poids' ? 'kg' : 'cm'}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
-            <div className="bg-zinc-900 rounded-2xl p-6 border-2 border-zinc-800">
-  <div className="flex justify-between items-center mb-6">
-    <h3 className="text-xl font-black uppercase tracking-tighter">📜 Historique</h3>
-    <span className="text-xs font-bold text-zinc-500 bg-zinc-800 px-2 py-1 rounded">
-      {measurements.length} entrées
-    </span>
-  </div>
 
-  <div className="space-y-3">
-    {/* On ne prend que les 10 premiers sauf si showAllHistory est vrai */}
-    {measurements.slice(0, showAllHistory ? measurements.length : 10).map((m) => (
-      <div key={m.id} className="bg-zinc-800/30 p-4 rounded-xl border border-zinc-800 flex justify-between items-center group hover:border-zinc-600 transition-colors">
-        <div>
-          <div className="font-bold text-zinc-200">
-            {new Date(m.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
-          </div>
-          <div className="text-sm text-zinc-500">
-            <span className="text-green-400 font-bold">{m.poids}kg</span> 
-            {m.bras && ` • Bras: ${m.bras}cm`} 
-            {m.taille && ` • Taille: ${m.taille}cm`}
-          </div>
-        </div>
-        <button 
-          onClick={() => deleteMeasurement(m.id)} 
-          className="opacity-0 group-hover:opacity-100 text-red-500 font-bold text-[10px] uppercase bg-red-500/10 px-3 py-2 rounded-lg hover:bg-red-500 hover:text-white transition-all"
-        >
-          Supprimer
-        </button>
-      </div>
-    ))}
-  </div>
+            {/* Graphiques d'évolution - Fixé */}
+            {measurements.length >= 2 && (
+              <div className="bg-zinc-900 rounded-3xl p-6 border-2 border-zinc-800">
+                <div className="flex justify-between items-center mb-8">
+                  <h3 className="text-xl font-black uppercase tracking-tighter italic">📈 Graphiques</h3>
+                  <div className="flex bg-zinc-800 p-1 rounded-lg">
+                    {['7d', '1m', 'all'].map(r => (
+                      <button key={r} onClick={() => setTimeRange(r)} className={`px-3 py-1 text-[10px] font-black rounded ${timeRange === r ? 'bg-green-600 text-white' : 'text-zinc-500'}`}>{r.toUpperCase()}</button>
+                    ))}
+                  </div>
+                </div>
 
-  {/* Bouton "Voir tout" */}
-  {measurements.length > 10 && (
-    <button
-      onClick={() => setShowAllHistory(!showAllHistory)}
-      className="w-full mt-6 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all border border-zinc-700"
-    >
-      {showAllHistory ? '▲ Réduire la liste' : `▼ Voir les ${measurements.length - 10} entrées précédentes`}
-    </button>
-  )}
-</div>
+                {/* Graph Poids */}
+                <div className="h-[250px] w-full mb-10">
+                  <h4 className="text-xs font-bold text-green-500 uppercase mb-4 ml-2">Poids Évolution</h4>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={getFilteredData('poids')}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                      <XAxis dataKey="date" stroke="#52525b" fontSize={10} tickMargin={10} />
+                      <YAxis hide domain={['dataMin - 1', 'dataMax + 1']} />
+                      <Tooltip contentStyle={{ backgroundColor: '#18181b', border: 'none', borderRadius: '12px' }} />
+                      <Line type="monotone" dataKey="moyenne" stroke="#3f3f46" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                      <Line type="monotone" dataKey="value" stroke="#22c55e" strokeWidth={4} dot={timeRange === '7d'} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Grid petits graphs - Fixé pour Taille et autres */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {['bras', 'taille', 'cuisses', 'epaules'].map(m => {
+                    const data = getFilteredData(m);
+                    if (data.length < 2) return null;
+                    return (
+                      <div key={m} className="bg-black/20 p-4 rounded-2xl border border-zinc-800">
+                        <h4 className="text-[10px] font-bold text-zinc-500 uppercase mb-2">{m}</h4>
+                        <ResponsiveContainer width="100%" height={100}>
+                          <LineChart data={data}>
+                            <YAxis hide domain={['dataMin - 0.5', 'dataMax + 0.5']} />
+                            <Tooltip contentStyle={{ display: 'none' }} />
+                            <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={3} dot={false} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Historique avec Edition */}
+            <div className="bg-zinc-900 rounded-3xl p-6 border-2 border-zinc-800">
+              <h3 className="text-xl font-black uppercase mb-6 italic">📜 Historique</h3>
+              <div className="space-y-3">
+                {measurements.slice(0, showAllHistory ? measurements.length : 10).map((m) => (
+                  <div key={m.id} className="bg-zinc-800/50 p-4 rounded-2xl flex justify-between items-center group">
+                    <div>
+                      <div className="text-sm font-black text-zinc-200">
+                        {new Date(m.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                      </div>
+                      <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
+                        {m.poids}kg • {m.bras || '--'}cm bras • {m.taille || '--'}cm taille
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => startEdit(m)} className="p-3 bg-zinc-800 text-purple-400 rounded-xl hover:bg-purple-500 hover:text-white transition-all">
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => deleteMeasurement(m.id)} className="p-3 bg-zinc-800 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {measurements.length > 10 && (
+                <button onClick={() => setShowAllHistory(!showAllHistory)} className="w-full mt-6 py-4 bg-zinc-800 text-zinc-500 font-black uppercase text-[10px] tracking-widest rounded-2xl">
+                  {showAllHistory ? 'Réduire' : `Voir les ${measurements.length - 10} restants`}
+                </button>
+              )}
+            </div>
+
           </div>
-        ) : null}
+        )}
       </div>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fadeIn { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fadeIn { animation: fadeIn 0.4s ease-out forwards; }
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }
       `}</style>
-    </div>
-  );
-};
-
-const InfoBlock = ({ icon: Icon, label, text, color }) => {
-  const colorMap = {
-    yellow: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', text: 'text-yellow-400', icon: 'text-yellow-400' },
-    green: { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-400', icon: 'text-green-400' },
-    blue: { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-400', icon: 'text-blue-400' },
-    red: { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-400', icon: 'text-red-400' },
-    purple: { bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-400', icon: 'text-purple-400' },
-    cyan: { bg: 'bg-cyan-500/10', border: 'border-cyan-500/30', text: 'text-cyan-400', icon: 'text-cyan-400' },
-    emerald: { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-400', icon: 'text-emerald-400' }
-  };
-  const colors = colorMap[color] || colorMap.blue;
-  return (
-    <div className={`${colors.bg} border ${colors.border} rounded-lg p-4`}>
-      <div className="flex items-start gap-3">
-        <Icon className={`w-4 h-4 mt-0.5 ${colors.icon} flex-shrink-0`} />
-        <div className="flex-1">
-          <span className={`font-bold text-xs uppercase ${colors.text} mr-2`}>{label}:</span>
-          <span className="text-sm text-zinc-300 leading-relaxed">{text}</span>
-        </div>
-      </div>
     </div>
   );
 };
