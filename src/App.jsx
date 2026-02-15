@@ -7,10 +7,12 @@ const WorkoutApp = () => {
   const [activeDay, setActiveDay] = useState('lundi');
   const [expandedDay, setExpandedDay] = useState(null);
   useEffect(() => {
-  fetch('/.netlify/functions/posts')
+  fetch('/.netlify/functions/db')
     .then(res => res.json())
-    .then(data => console.log(data));
+    .then(data => console.log('DB OK:', data))
+    .catch(err => console.error(err));
 }, []);
+
   // Mensurations
   const [measurements, setMeasurements] = useState(() => {
     const saved = localStorage.getItem('measurements');

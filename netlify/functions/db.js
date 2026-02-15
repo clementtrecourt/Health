@@ -1,6 +1,7 @@
 import { neon } from '@netlify/neon';
 
-const sql = neon(); 
+const sql = neon(); // utilise automatiquement NETLIFY_DATABASE_URL
+
 export async function handler(event) {
   try {
     const result = await sql`SELECT NOW()`;
