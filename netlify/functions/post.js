@@ -1,14 +1,13 @@
 import { neon } from '@netlify/neon';
 
-const sql = neon();
-
+const sql = neon(); 
 export async function handler(event) {
   try {
-    const posts = await sql`SELECT * FROM posts`;
-
+    const result = await sql`SELECT NOW()`;
+    
     return {
       statusCode: 200,
-      body: JSON.stringify(posts),
+      body: JSON.stringify(result),
     };
   } catch (error) {
     return {
