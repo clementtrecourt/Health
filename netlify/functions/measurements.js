@@ -19,7 +19,7 @@ export async function handler(event) {
 
     // POST → ajouter
     if (event.httpMethod === "POST") {
-      if (method === "POST") {
+
         const b = JSON.parse(event.body);
         const result = await sql`
     INSERT INTO measurements (date, poids, cou, epaules, pectoraux, taille, cuisses, bras)
@@ -36,7 +36,7 @@ export async function handler(event) {
     RETURNING *
   `;
         return { statusCode: 201, body: JSON.stringify(result[0]) };
-      }
+
     }
 
     // PUT → modifier

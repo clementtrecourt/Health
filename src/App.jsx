@@ -29,7 +29,7 @@ const [timeRange, setTimeRange] = useState('7d'); // '7d', '1m', '1y', 'all'
 }, []);
   // Mensurations
   const [measurements, setMeasurements] = useState([]);
-  
+  const [showAllHistory, setShowAllHistory] = useState(false);
   const [newMeasurement, setNewMeasurement] = useState({
     date: new Date().toISOString().split('T')[0],
     cou: '',
@@ -723,19 +723,47 @@ const [timeRange, setTimeRange] = useState('7d'); // '7d', '1m', '1y', 'all'
               </div>
             )}
             <div className="bg-zinc-900 rounded-2xl p-6 border-2 border-zinc-800">
-              <h3 className="text-xl font-black mb-4 uppercase">📜 Historique</h3>
-              <div className="space-y-3">
-                {measurements.map((m) => (
-                  <div key={m.id} className="bg-zinc-800/30 p-4 rounded-xl border border-zinc-800 flex justify-between items-center">
-                    <div>
-                      <div className="font-bold">{new Date(m.date).toLocaleDateString('fr-FR')}</div>
-                      <div className="text-sm text-zinc-500">Poids: {m.poids}kg | Bras: {m.bras}cm | Taille: {m.taille}cm</div>
-                    </div>
-                    <button onClick={() => deleteMeasurement(m.id)} className="text-red-500 font-bold text-xs uppercase hover:bg-red-500/10 p-2 rounded-lg">Supprimer</button>
-                  </div>
-                ))}
-              </div>
-            </div>
+  <div className="flex justify-between items-center mb-6">
+    <h3 className="text-xl font-black uppercase tracking-tighter">📜 Historique</h3>
+    <span className="text-xs font-bold text-zinc-500 bg-zinc-800 px-2 py-1 rounded">
+      {measurements.length} entrées
+    </span>
+  </div>
+
+  <div className="space-y-3">
+    {/* On ne prend que les 10 premiers sauf si showAllHistory est vrai */}
+    {measurements.slice(0, showAllHistory ? measurements.length : 10).map((m) => (
+      <div key={m.id} className="bg-zinc-800/30 p-4 rounded-xl border border-zinc-800 flex justify-between items-center group hover:border-zinc-600 transition-colors">
+        <div>
+          <div className="font-bold text-zinc-200">
+            {new Date(m.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+          </div>
+          <div className="text-sm text-zinc-500">
+            <span className="text-green-400 font-bold">{m.poids}kg</span> 
+            {m.bras && ` • Bras: ${m.bras}cm`} 
+            {m.taille && ` • Taille: ${m.taille}cm`}
+          </div>
+        </div>
+        <button 
+          onClick={() => deleteMeasurement(m.id)} 
+          className="opacity-0 group-hover:opacity-100 text-red-500 font-bold text-[10px] uppercase bg-red-500/10 px-3 py-2 rounded-lg hover:bg-red-500 hover:text-white transition-all"
+        >
+          Supprimer
+        </button>
+      </div>
+    ))}
+  </div>
+
+  {/* Bouton "Voir tout" */}
+  {measurements.length > 10 && (
+    <button
+      onClick={() => setShowAllHistory(!showAllHistory)}
+      className="w-full mt-6 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all border border-zinc-700"
+    >
+      {showAllHistory ? '▲ Réduire la liste' : `▼ Voir les ${measurements.length - 10} entrées précédentes`}
+    </button>
+  )}
+</div>
           </div>
         ) : null}
       </div>
