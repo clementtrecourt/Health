@@ -1,23 +1,39 @@
+import { sql } from './db.js';
 import fs from 'fs';
-import { neon } from '@netlify/neon';
+import path from 'path';
 
-const sql = neon();
-const csvData = fs.readFileSync('weights.csv', 'utf-8');
-const rows = csvData
-  .split('\n')
-  .slice(1) // ignorer l'en-tête
-  .map(line => line.split('\t')) // tab-delimited
-  .map(([date, poids, moyenne]) => ({
-    date,
-    poids: parseFloat(poids)
-  }));
+export const handler = async () => {
+  try {
+    // Chemin vers ton fichier CSV local (pendant build)
+    const csvPath = path.resolve('./weights.csv');
+    const csvData = fs.readFileSync(csvPath, 'utf-8');
 
-for (const row of rows) {
-  await sql`
-    INSERT INTO measurements(date, poids)
-    VALUES(${row.date}, ${row.poids})
-  `;
-}
+    const rows = csvData
+      .split('\n')
+      .slice(1) // ignorer l'entête
+      .map(line => line.split(/\t|,/)) // tab ou virgule
+      .map(([date, poids, moyenne]) => ({
+        date,
+        poids: parseFloat(poids)
+      }));
+
+    // Insérer chaque ligne dans la DB
+    for (const row of rows) {
+      await sql`
+        INSERT INTO measurements(date, poids)
+        VALUES(${row.date}, ${row.poids})
+      `;
+    }
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ message: 'Import CSV terminé', count: rows.length }),
+    };
+  } catch (err) {
+    console.error(err);
+    return { statusCode: 500, body: String(err) };
+  }
+};
 
 console.log('Import terminé');
 export async function handler(event) {
