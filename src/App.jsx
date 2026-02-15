@@ -337,7 +337,33 @@ const [timeRange, setTimeRange] = useState('7d'); // '7d', '1m', '1y', 'all'
   };
 
   const weeklyVolume = getAllMuscleVolume();
+  const getWeightTrends = () => {
+    if (measurements.length < 2) return { sevenDays: null, oneMonth: null };
 
+    const sorted = [...measurements].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const latestWeight = parseFloat(sorted[0].poids);
+
+    const getDiff = (daysAgo) => {
+      const targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() - daysAgo);
+      
+      const pastEntry = sorted.find(m => new Date(m.date) <= targetDate);
+      if (!pastEntry) return null;
+      
+      const diff = latestWeight - parseFloat(pastEntry.poids);
+      return {
+        value: diff.toFixed(2),
+        isLoss: diff <= 0
+      };
+    };
+
+    return {
+      sevenDays: getDiff(7),
+      oneMonth: getDiff(30)
+    };
+  };
+
+  const weightTrends = getWeightTrends();
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Super Header avec stats */}
@@ -521,29 +547,53 @@ const [timeRange, setTimeRange] = useState('7d'); // '7d', '1m', '1y', 'all'
             </div>
 
             {getLatestMeasurement() && (
-              <div className="bg-zinc-900 rounded-2xl p-6 border border-green-700/30">
-                <h3 className="text-xl font-black mb-4 uppercase tracking-wider">📊 État Actuel</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {['poids', 'cou', 'epaules', 'pectoraux', 'taille', 'bras', 'cuisses'].map(metric => {
-                    const latest = getLatestMeasurement();
-                    const value = latest[metric];
-                    const progress = getMeasurementProgress(metric);
-                    if (!value) return null;
-                    return (
-                      <div key={metric} className="bg-black/40 p-4 rounded-xl border border-zinc-800">
-                        <div className="text-xs text-zinc-500 uppercase font-bold mb-1">{metric}</div>
-                        <div className="text-2xl font-black text-green-400">{value} {metric === 'poids' ? 'kg' : 'cm'}</div>
-                        {progress && (
-                          <div className={`text-xs font-bold mt-1 ${parseFloat(progress) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {parseFloat(progress) >= 0 ? '↗' : '↘'} {Math.abs(progress)}%
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+  <div className="bg-zinc-900 rounded-2xl p-6 border border-green-700/30">
+    <h3 className="text-xl font-black mb-4 uppercase tracking-wider">📊 État Actuel</h3>
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {['poids', 'bras', 'taille', 'epaules', 'pectoraux', 'cuisses', 'cou'].map(metric => {
+        const latest = getLatestMeasurement();
+        const value = latest[metric];
+        if (!value) return null;
+
+        return (
+          <div key={metric} className={`p-4 rounded-xl border ${metric === 'poids' ? 'bg-green-500/5 border-green-500/20 col-span-2 md:col-span-1' : 'bg-black/40 border-zinc-800'}`}>
+            <div className="text-xs text-zinc-500 uppercase font-bold mb-1">{metric}</div>
+            <div className={`text-2xl font-black ${metric === 'poids' ? 'text-green-400' : 'text-white'}`}>
+              {value} <small className="text-xs">{metric === 'poids' ? 'kg' : 'cm'}</small>
+            </div>
+
+            {/* Affichage spécifique pour le POIDS (7j / 1m) */}
+            {metric === 'poids' && weightTrends.sevenDays && (
+              <div className="mt-3 space-y-1 border-t border-white/5 pt-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] text-zinc-500 font-bold uppercase">7 jours</span>
+                  <span className={`text-xs font-black ${weightTrends.sevenDays.isLoss ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {weightTrends.sevenDays.value > 0 ? '+' : ''}{weightTrends.sevenDays.value} kg
+                  </span>
                 </div>
+                {weightTrends.oneMonth && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase">1 mois</span>
+                    <span className={`text-xs font-black ${weightTrends.oneMonth.isLoss ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {weightTrends.oneMonth.value > 0 ? '+' : ''}{weightTrends.oneMonth.value} kg
+                    </span>
+                  </div>
+                )}
               </div>
             )}
+
+            {/* Pour les autres metrics (bras, taille...), on garde le % classique */}
+            {metric !== 'poids' && getMeasurementProgress(metric) && (
+              <div className={`text-xs font-bold mt-1 ${parseFloat(getMeasurementProgress(metric)) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {parseFloat(getMeasurementProgress(metric)) >= 0 ? '↗' : '↘'} {Math.abs(getMeasurementProgress(metric))}%
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  </div>
+)}
             {/* Graphiques d'évolution */}
 {measurements.length >= 2 && (
   <div className="space-y-6">

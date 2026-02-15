@@ -1,12 +1,12 @@
-import fs from 'fs';
-import { neon } from '@netlify/neon';
+import fs from "fs";
+import { neon } from "@netlify/neon";
 
 const sql = neon();
 
 export async function handler(event) {
   try {
     // GET → récupérer toutes les mensurations
-    if (event.httpMethod === 'GET') {
+    if (event.httpMethod === "GET") {
       const data = await sql`
         SELECT * FROM measurements
         ORDER BY date DESC
@@ -18,26 +18,29 @@ export async function handler(event) {
     }
 
     // POST → ajouter
-    if (event.httpMethod === 'POST') {
-      const body = JSON.parse(event.body);
-
-      const result = await sql`
-        INSERT INTO measurements 
-        (date, cou, epaules, pectoraux, taille, cuisses, bras, poids)
-        VALUES 
-        (${body.date}, ${body.cou}, ${body.epaules}, ${body.pectoraux},
-         ${body.taille}, ${body.cuisses}, ${body.bras}, ${body.poids})
-        RETURNING *
-      `;
-
-      return {
-        statusCode: 201,
-        body: JSON.stringify(result[0]),
-      };
+    if (event.httpMethod === "POST") {
+      if (method === "POST") {
+        const b = JSON.parse(event.body);
+        const result = await sql`
+    INSERT INTO measurements (date, poids, cou, epaules, pectoraux, taille, cuisses, bras)
+    VALUES (${b.date}, ${b.poids}, ${b.cou}, ${b.epaules}, ${b.pectoraux}, ${b.taille}, ${b.cuisses}, ${b.bras})
+    ON CONFLICT (date) 
+    DO UPDATE SET 
+        poids = EXCLUDED.poids,
+        cou = EXCLUDED.cou,
+        epaules = EXCLUDED.epaules,
+        pectoraux = EXCLUDED.pectoraux,
+        taille = EXCLUDED.taille,
+        cuisses = EXCLUDED.cuisses,
+        bras = EXCLUDED.bras
+    RETURNING *
+  `;
+        return { statusCode: 201, body: JSON.stringify(result[0]) };
+      }
     }
 
     // PUT → modifier
-    if (event.httpMethod === 'PUT') {
+    if (event.httpMethod === "PUT") {
       const body = JSON.parse(event.body);
 
       const result = await sql`
@@ -60,22 +63,21 @@ export async function handler(event) {
     }
 
     // DELETE → supprimer
-    if (event.httpMethod === 'DELETE') {
+    if (event.httpMethod === "DELETE") {
       const { id } = JSON.parse(event.body);
 
       await sql`DELETE FROM measurements WHERE id=${id}`;
 
       return {
         statusCode: 200,
-        body: JSON.stringify({ message: 'Deleted' }),
+        body: JSON.stringify({ message: "Deleted" }),
       };
     }
-
   } catch (error) {
     console.error("Erreur backend:", error); // <== AJOUT
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message }),
     };
-}
+  }
 }
