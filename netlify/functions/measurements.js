@@ -71,9 +71,10 @@ export async function handler(event) {
     }
 
   } catch (error) {
+    console.error("Erreur backend:", error); // <== AJOUT
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message }),
     };
-  }
+}
 }

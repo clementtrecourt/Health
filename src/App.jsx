@@ -42,14 +42,32 @@ const WorkoutApp = () => {
 
   // Fonctions mensurations
   const saveMeasurement = async () => {
-  const res = await fetch('/.netlify/functions/measurements', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(newMeasurement),
-  });
+  try {
+    // Convertir les strings vides en null ou number
+    const payload = {
+      ...newMeasurement,
+      cou: newMeasurement.cou ? parseFloat(newMeasurement.cou) : null,
+      epaules: newMeasurement.epaules ? parseFloat(newMeasurement.epaules) : null,
+      pectoraux: newMeasurement.pectoraux ? parseFloat(newMeasurement.pectoraux) : null,
+      taille: newMeasurement.taille ? parseFloat(newMeasurement.taille) : null,
+      cuisses: newMeasurement.cuisses ? parseFloat(newMeasurement.cuisses) : null,
+      bras: newMeasurement.bras ? parseFloat(newMeasurement.bras) : null,
+      poids: newMeasurement.poids ? parseFloat(newMeasurement.poids) : null,
+    };
 
-  const saved = await res.json();
-  setMeasurements(prev => [saved, ...prev]);
+    const res = await fetch('/.netlify/functions/measurements', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) throw new Error('Erreur ajout');
+
+    const saved = await res.json();
+    setMeasurements(prev => [saved, ...prev]);
+  } catch (err) {
+    console.error(err);
+  }
 };
 
   const deleteMeasurement = async (id) => {
