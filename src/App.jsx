@@ -93,15 +93,14 @@ const WorkoutApp = () => {
     return ((latest - previous) / previous * 100).toFixed(1);
   };
   const getChartData = (metric) => {
-    return measurements
-      .slice()
-      .reverse()
-      .filter(m => m[metric])
-      .map(m => ({
-        date: new Date(m.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
-        value: parseFloat(m[metric])
-      }));
-  };
+  return measurements
+    .filter(m => m[metric])
+    .sort((a, b) => new Date(a.date) - new Date(b.date)) // tri croissant par date
+    .map(m => ({
+      date: new Date(m.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
+      value: parseFloat(m[metric])
+    }));
+};
   const workoutDays = {
     lundi: {
       name: "UPPER A",
