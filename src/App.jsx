@@ -6,18 +6,28 @@ const WorkoutApp = () => {
   const [activeView, setActiveView] = useState('program');
   const [activeDay, setActiveDay] = useState('lundi');
   const [expandedDay, setExpandedDay] = useState(null);
+//   useEffect(() => {
+//   fetch('/.netlify/functions/db')
+//     .then(res => res.json())
+//     .then(data => console.log('DB OK:', data))
+//     .catch(err => console.error(err));
+// }, []);
   useEffect(() => {
-  fetch('/.netlify/functions/db')
-    .then(res => res.json())
-    .then(data => console.log('DB OK:', data))
-    .catch(err => console.error(err));
-}, []);
+  const loadMeasurements = async () => {
+    try {
+      const res = await fetch('/.netlify/functions/measurements');
+      if (!res.ok) throw new Error('Erreur serveur');
+      const data = await res.json();
+      setMeasurements(data);
+    } catch (err) {
+      console.error('Erreur chargement:', err);
+    }
+  };
 
+  loadMeasurements();
+}, []);
   // Mensurations
-  const [measurements, setMeasurements] = useState(() => {
-    const saved = localStorage.getItem('measurements');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [measurements, setMeasurements] = useState([]);
   
   const [newMeasurement, setNewMeasurement] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -31,34 +41,27 @@ const WorkoutApp = () => {
   });
 
   // Fonctions mensurations
-  const saveMeasurement = () => {
-    const measurement = {
-      ...newMeasurement,
-      id: Date.now(),
-      timestamp: new Date().toISOString()
-    };
-    const updated = [measurement, ...measurements];
-    setMeasurements(updated);
-    localStorage.setItem('measurements', JSON.stringify(updated));
-    
-    // Reset form
-    setNewMeasurement({
-      date: new Date().toISOString().split('T')[0],
-      cou: '',
-      epaules: '',
-      pectoraux: '',
-      taille: '',
-      cuisses: '',
-      bras: '',
-      poids: ''
-    });
-  };
+  const saveMeasurement = async () => {
+  const res = await fetch('/.netlify/functions/measurements', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(newMeasurement),
+  });
 
-  const deleteMeasurement = (id) => {
-    const updated = measurements.filter(m => m.id !== id);
-    setMeasurements(updated);
-    localStorage.setItem('measurements', JSON.stringify(updated));
-  };
+  const saved = await res.json();
+  setMeasurements(prev => [saved, ...prev]);
+};
+
+  const deleteMeasurement = async (id) => {
+  await fetch('/.netlify/functions/measurements', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }),
+  });
+
+  setMeasurements(prev => prev.filter(m => m.id !== id));
+
+};
 
   const getLatestMeasurement = () => {
     return measurements.length > 0 ? measurements[0] : null;
