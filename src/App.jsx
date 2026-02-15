@@ -12,6 +12,7 @@ const WorkoutApp = () => {
 //     .then(data => console.log('DB OK:', data))
 //     .catch(err => console.error(err));
 // }, []);
+const [timeRange, setTimeRange] = useState('7d'); // '7d', '1m', '1y', 'all'
   useEffect(() => {
   const loadMeasurements = async () => {
     try {
@@ -100,6 +101,38 @@ const WorkoutApp = () => {
       date: new Date(m.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
       value: parseFloat(m[metric])
     }));
+};
+  const getFilteredData = (metric) => {
+  // 1. On trie par date croissante pour le graphique et le calcul
+  const sorted = [...measurements].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  // 2. On calcule la moyenne mobile (sur 7 points)
+  const dataWithMA = sorted.map((m, index) => {
+    const windowSize = 7;
+    const start = Math.max(0, index - windowSize + 1);
+    const subset = sorted.slice(start, index + 1);
+    const sum = subset.reduce((acc, curr) => acc + (parseFloat(curr[metric]) || 0), 0);
+    const avg = sum / subset.length;
+
+    return {
+      date: new Date(m.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
+      fullDate: new Date(m.date),
+      value: parseFloat(m[metric]),
+      moyenne: parseFloat(avg.toFixed(2))
+    };
+  });
+
+  // 3. On filtre selon la période
+  const now = new Date();
+  return dataWithMA.filter(d => {
+    const diffTime = Math.abs(now - d.fullDate);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (timeRange === '7d') return diffDays <= 7;
+    if (timeRange === '1m') return diffDays <= 30;
+    if (timeRange === '1y') return diffDays <= 365;
+    return true; // 'all'
+  });
 };
   const workoutDays = {
     lundi: {
@@ -512,106 +545,124 @@ const WorkoutApp = () => {
               </div>
             )}
             {/* Graphiques d'évolution */}
-            {measurements.length >= 2 && (
-              <div className="space-y-6">
-                <div className="bg-zinc-900 rounded-2xl p-6 border-2 border-zinc-800">
-                  <h3 className="text-2xl font-black mb-6 flex items-center gap-2">
-                    📈 Graphiques d'Évolution
-                  </h3>
+{measurements.length >= 2 && (
+  <div className="space-y-6">
+    <div className="bg-zinc-900 rounded-2xl p-6 border-2 border-zinc-800">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+        <h3 className="text-2xl font-black flex items-center gap-2">
+          📈 Évolution
+        </h3>
+        
+        {/* Sélecteur de période Style "Badass" */}
+        <div className="flex bg-zinc-800 p-1 rounded-xl border border-zinc-700">
+          {[
+            { id: '7d', label: '7J' },
+            { id: '1m', label: '1M' },
+            { id: '1y', label: '1A' },
+            { id: 'all', label: 'ALL' }
+          ].map((range) => (
+            <button
+              key={range.id}
+              onClick={() => setTimeRange(range.id)}
+              className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${
+                timeRange === range.id 
+                ? 'bg-green-500 text-black shadow-[0_0_15px_rgba(16,185,129,0.4)]' 
+                : 'text-zinc-500 hover:text-white'
+              }`}
+            >
+              {range.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-                  {/* Graphique Poids */}
-                  {getChartData('poids').length >= 2 && (
-                    <div className="mb-8">
-                      <h4 className="text-lg font-bold text-green-400 mb-4">Poids (kg)</h4>
-                      <ResponsiveContainer width="100%" height={280}>
-                        <LineChart data={getChartData('poids')}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-                          <XAxis 
-                            dataKey="date" 
-                            stroke="#71717a"
-                            style={{ fontSize: '12px', fontWeight: 'bold' }}
-                          />
-                          <YAxis 
-                            stroke="#71717a"
-                            style={{ fontSize: '12px', fontWeight: 'bold' }}
-                            domain={['dataMin - 2', 'dataMax + 2']}
-                          />
-                          <Tooltip 
-                            contentStyle={{ 
-                              backgroundColor: '#18181b', 
-                              border: '2px solid #10b981',
-                              borderRadius: '12px',
-                              fontWeight: 'bold'
-                            }}
-                            labelStyle={{ color: '#10b981' }}
-                          />
-                          <Line 
-                            type="monotone" 
-                            dataKey="value" 
-                            stroke="#10b981" 
-                            strokeWidth={4}
-                            dot={{ fill: '#10b981', r: 6, strokeWidth: 2, stroke: '#fff' }}
-                            activeDot={{ r: 8 }}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
+      {/* Graphique Poids principal */}
+      <div className="mb-8">
+        <div className="flex justify-between items-end mb-4">
+          <h4 className="text-lg font-bold text-green-400">Poids (kg)</h4>
+          <div className="text-xs text-zinc-500 flex gap-4">
+            <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-green-500"></span> Réel</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-white opacity-50 border-t border-dashed"></span> Moyenne (7j)</span>
+          </div>
+        </div>
+        
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={getFilteredData('poids')}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+            <XAxis 
+              dataKey="date" 
+              stroke="#71717a"
+              style={{ fontSize: '10px', fontWeight: 'bold' }}
+              minTickGap={10}
+            />
+            <YAxis 
+              stroke="#71717a"
+              style={{ fontSize: '10px', fontWeight: 'bold' }}
+              domain={['dataMin - 1', 'dataMax + 1']}
+              tickFormatter={(value) => `${value}k`}
+            />
+            <Tooltip 
+              contentStyle={{ 
+                backgroundColor: '#18181b', 
+                border: '2px solid #10b981',
+                borderRadius: '12px',
+              }}
+            />
+            {/* Ligne Moyenne Mobile (Lissée) */}
+            <Line 
+              type="monotone" 
+              dataKey="moyenne" 
+              stroke="#ffffff" 
+              strokeWidth={2}
+              strokeDasharray="5 5"
+              dot={false}
+              opacity={0.4}
+            />
+            {/* Ligne Réelle */}
+            <Line 
+              type="monotone" 
+              dataKey="value" 
+              stroke="#10b981" 
+              strokeWidth={4}
+              dot={timeRange === '7d' ? { fill: '#10b981', r: 4 } : false} 
+              activeDot={{ r: 6 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
 
-                  {/* Graphiques Mensurations - Grid */}
-                  <div className="grid md:grid-cols-2 gap-6">
-                    {['bras', 'pectoraux', 'epaules', 'taille', 'cuisses', 'cou'].map(metric => {
-                      const chartData = getChartData(metric);
-                      if (chartData.length < 2) return null;
-                      
-                      const metricLabels = {
-                        bras: 'Bras', pectoraux: 'Pectoraux', epaules: 'Épaules',
-                        taille: 'Taille', cuisses: 'Cuisses', cou: 'Cou'
-                      };
-
-                      return (
-                        <div key={metric} className="bg-zinc-800/50 p-4 rounded-xl border border-zinc-700">
-                          <h4 className="text-md font-bold text-cyan-400 mb-3">{metricLabels[metric]} (cm)</h4>
-                          <ResponsiveContainer width="100%" height={220}>
-                            <LineChart data={chartData}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
-                              <XAxis 
-                                dataKey="date" 
-                                stroke="#71717a"
-                                style={{ fontSize: '11px', fontWeight: 'bold' }}
-                              />
-                              <YAxis 
-                                stroke="#71717a"
-                                style={{ fontSize: '11px', fontWeight: 'bold' }}
-                                domain={['dataMin - 1', 'dataMax + 1']}
-                              />
-                              <Tooltip 
-                                contentStyle={{ 
-                                  backgroundColor: '#18181b', 
-                                  border: '2px solid #06b6d4',
-                                  borderRadius: '8px',
-                                  fontSize: '12px',
-                                  fontWeight: 'bold'
-                                }}
-                                labelStyle={{ color: '#06b6d4' }}
-                              />
-                              <Line 
-                                type="monotone" 
-                                dataKey="value" 
-                                stroke="#06b6d4" 
-                                strokeWidth={3}
-                                dot={{ fill: '#06b6d4', r: 5, strokeWidth: 2, stroke: '#fff' }}
-                                activeDot={{ r: 6 }}
-                              />
-                            </LineChart>
-                          </ResponsiveContainer>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
+      {/* Autres mensurations en petit */}
+      <div className="grid md:grid-cols-2 gap-4">
+        {['bras', 'taille', 'cuisses', 'pectoraux'].map(metric => {
+          const data = getFilteredData(metric);
+          if (data.length < 2) return null;
+          
+          return (
+            <div key={metric} className="bg-zinc-800/30 p-4 rounded-xl border border-zinc-800">
+              <h4 className="text-sm font-bold text-cyan-400 mb-2 uppercase">{metric}</h4>
+              <ResponsiveContainer width="100%" height={120}>
+                <LineChart data={data}>
+                  <XAxis dataKey="date" hide />
+                  <YAxis hide domain={['dataMin - 1', 'dataMax + 1']} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#18181b', border: '1px solid #06b6d4', fontSize: '10px' }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="value" 
+                    stroke="#06b6d4" 
+                    strokeWidth={2} 
+                    dot={false} 
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  </div>
+)}
 
             {/* Message si pas assez de données */}
             {measurements.length > 0 && measurements.length < 2 && (
