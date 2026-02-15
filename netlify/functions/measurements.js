@@ -1,114 +1,53 @@
 import { sql } from './db.js';
-import fs from 'fs';
-import path from 'path';
 
-export const handler = async () => {
-  try {
-    // Chemin vers ton fichier CSV local (pendant build)
-    const csvPath = path.resolve('./weights.csv');
-    const csvData = fs.readFileSync(csvPath, 'utf-8');
-
-    const rows = csvData
-      .split('\n')
-      .slice(1) // ignorer l'entête
-      .map(line => line.split(/\t|,/)) // tab ou virgule
-      .map(([date, poids, moyenne]) => ({
-        date,
-        poids: parseFloat(poids)
-      }));
-
-    // Insérer chaque ligne dans la DB
-    for (const row of rows) {
-      await sql`
-        INSERT INTO measurements(date, poids)
-        VALUES(${row.date}, ${row.poids})
-      `;
-    }
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ message: 'Import CSV terminé', count: rows.length }),
-    };
-  } catch (err) {
-    console.error(err);
-    return { statusCode: 500, body: String(err) };
-  }
-};
-
-console.log('Import terminé');
 export async function handler(event) {
+  const method = event.httpMethod;
+
   try {
-    // GET → récupérer toutes les mensurations
-    if (event.httpMethod === 'GET') {
-      const data = await sql`
-        SELECT * FROM measurements
-        ORDER BY date DESC
-      `;
-      return {
-        statusCode: 200,
-        body: JSON.stringify(data),
-      };
+    // GET : Récupérer les données
+    if (method === 'GET') {
+      const data = await sql`SELECT * FROM measurements ORDER BY date DESC`;
+      return { statusCode: 200, body: JSON.stringify(data) };
     }
 
-    // POST → ajouter
-    if (event.httpMethod === 'POST') {
-      const body = JSON.parse(event.body);
-
+    // POST : Ajouter une mesure
+    if (method === 'POST') {
+      const b = JSON.parse(event.body);
       const result = await sql`
-        INSERT INTO measurements 
-        (date, cou, epaules, pectoraux, taille, cuisses, bras, poids)
-        VALUES 
-        (${body.date}, ${body.cou}, ${body.epaules}, ${body.pectoraux},
-         ${body.taille}, ${body.cuisses}, ${body.bras}, ${body.poids})
+        INSERT INTO measurements (date, cou, epaules, pectoraux, taille, cuisses, bras, poids)
+        VALUES (${b.date}, ${b.cou}, ${b.epaules}, ${b.pectoraux}, ${b.taille}, ${b.cuisses}, ${b.bras}, ${b.poids})
         RETURNING *
       `;
-
-      return {
-        statusCode: 201,
-        body: JSON.stringify(result[0]),
-      };
+      return { statusCode: 201, body: JSON.stringify(result[0]) };
     }
 
-    // PUT → modifier
-    if (event.httpMethod === 'PUT') {
-      const body = JSON.parse(event.body);
-
+    // PUT : Modifier une mesure
+    if (method === 'PUT') {
+      const b = JSON.parse(event.body);
       const result = await sql`
         UPDATE measurements
-        SET cou=${body.cou},
-            epaules=${body.epaules},
-            pectoraux=${body.pectoraux},
-            taille=${body.taille},
-            cuisses=${body.cuisses},
-            bras=${body.bras},
-            poids=${body.poids}
-        WHERE id=${body.id}
+        SET cou=${b.cou}, epaules=${b.epaules}, pectoraux=${b.pectoraux}, 
+            taille=${b.taille}, cuisses=${b.cuisses}, bras=${b.bras}, poids=${b.poids}
+        WHERE id=${b.id}
         RETURNING *
       `;
-
-      return {
-        statusCode: 200,
-        body: JSON.stringify(result[0]),
-      };
+      return { statusCode: 200, body: JSON.stringify(result[0]) };
     }
 
-    // DELETE → supprimer
-    if (event.httpMethod === 'DELETE') {
+    // DELETE : Supprimer
+    if (method === 'DELETE') {
       const { id } = JSON.parse(event.body);
-
       await sql`DELETE FROM measurements WHERE id=${id}`;
-
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ message: 'Deleted' }),
-      };
+      return { statusCode: 200, body: JSON.stringify({ message: 'Supprimé' }) };
     }
+
+    return { statusCode: 405, body: 'Méthode non autorisée' };
 
   } catch (error) {
-    console.error("Erreur backend:", error); // <== AJOUT
+    console.error("Erreur backend:", error);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message }),
     };
-}
+  }
 }
